@@ -1,60 +1,62 @@
 import json
+import logging
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from django.utils.dateparse import parse_datetime
-from .models import ServerNode, LogEntry
+from .models import ServerNode
+from .utils import preprocess_logs
+from .tasks import process_logs_task
 
-@csrf_exempt  # Permite que scripts externos envíen datos sin token de formulario
+logger = logging.getLogger(__name__)
+MAX_LOGS_PER_REQUEST = 10000
+
+@csrf_exempt
 @require_POST
 def ingest_logs(request):
     """
-    Endpoint para recibir lotes de logs desde tus servidores (nodos).
+    Endpoint Enterprise: recibe logs y delega procesamiento a Celery.
     """
     try:
-        data = json.loads(request.body)
+        if request.headers.get("Content-Type") != "application/json":
+            return JsonResponse({'error': 'Content-Type debe ser application/json.'}, status=415)
+
+        data = json.loads(request.body.decode("utf-8"))
         node_name = data.get('node_name')
         logs_list = data.get('logs', [])
 
         if not node_name:
             return JsonResponse({'error': 'Falta el parámetro node_name.'}, status=400)
 
-        # 1. Validar que el nodo exista y esté activo en el administrador
+        if not isinstance(logs_list, list):
+            return JsonResponse({'error': 'El campo logs debe ser una lista.'}, status=400)
+
+        if len(logs_list) > MAX_LOGS_PER_REQUEST:
+            return JsonResponse({'error': f'Límite de {MAX_LOGS_PER_REQUEST} logs excedido.'}, status=413)
+
+        # Validar nodo
         try:
             node = ServerNode.objects.get(name=node_name, is_active=True)
         except ServerNode.DoesNotExist:
             return JsonResponse({'error': 'ServerNode no registrado o inactivo.'}, status=403)
 
-        # 2. Preparar la inserción masiva (Bulk Create) para cuidar el rendimiento de tu PC
-        log_entries_to_create = []
-        
-        for log in logs_list:
-            raw_timestamp = log.get('timestamp')
-            parsed_timestamp = parse_datetime(raw_timestamp) if raw_timestamp else None
-            
-            if not parsed_timestamp:
-                continue  # Si el log no tiene fecha válida, lo ignora
+        # Preprocesar logs
+        valid_logs, ignored_logs = preprocess_logs(logs_list)
+        if not valid_logs:
+            return JsonResponse({'status': 'no_data', 'ignored_logs': ignored_logs}, status=200)
 
-            log_entry = LogEntry(
-                node=node,
-                timestamp=parsed_timestamp,
-                level=log.get('level', 'INFO'),
-                service_name=log.get('service_name', 'nginx'),
-                message=log.get('message', ''),
-                request_ip=log.get('request_ip', None)
-            )
-            log_entries_to_create.append(log_entry)
-
-        # 3. Guardar todo en una sola consulta SQL rápida
-        if log_entries_to_create:
-            LogEntry.objects.bulk_create(log_entries_to_create)
+        # Encolar tarea Celery
+        task = process_logs_task.delay(node.id, valid_logs, ignored_logs)
 
         return JsonResponse({
-            'status': 'success',
-            'received_logs': len(log_entries_to_create)
-        }, status=202)  # 202 = Accepted
+            'status': 'accepted',
+            'task_id': task.id,
+            'received_logs': len(valid_logs),
+            'ignored_logs': ignored_logs
+        }, status=202)
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'JSON inválido.'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': f'Error interno: {str(e)}'}, status=500)
+        logger.exception("Error interno crítico en ingest_logs")
+        return JsonResponse({'error': 'Error interno en el servidor.'}, status=500)
+

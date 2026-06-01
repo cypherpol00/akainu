@@ -119,3 +119,21 @@ REST_FRAMEWORK = {
         'rest_framework_permissions.ISAuthenricated'
     )
 }
+
+
+CELERY_BROKER_URL = env('CELERY_BROKER_URL')
+CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND')
+
+
+# Evita advertencias de obsolescencia en Celery 5+
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+# Configuraciones óptimas de procesamiento masivo
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'America/Bogota'
+
+# Seguridad ante desconexiones
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_TASK_TRACK_STARTED = True

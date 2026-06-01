@@ -61,5 +61,6 @@ class LogEntryAdmin(admin.ModelAdmin):
     search_fields = ('service_name', 'request_ip', 'message')
     # Optimización clave: Evita el problema N+1 queries haciendo un JOIN en la base de datos
     list_select_related = ('node',)
-    # Hacer los logs de solo lectura en el admin para evitar alteraciones manuales de auditoría
+    # Hacer los logs de so
+    # lo lectura en el admin para evitar alteraciones manuales de auditoría
     readonly_fields = ('timestamp', 'node', 'level', 'service_name', 'message', 'request_ip', 'anomaly_score', 'ai_metadata')

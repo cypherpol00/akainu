@@ -3,97 +3,273 @@
 
 {% block extrastyle %}
 {{ block.super }}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<script src="https://cdn.jsdelivr.net/npm/countup.js@2.0.7/dist/countUp.min.js"></script>
+
 <style>
-    .dashboard-container { padding: 20px; font-family: 'Roboto', sans-serif; background: #f8f9fa; min-height: 100vh; }
-    .metrics-row { display: flex; gap: 20px; margin-bottom: 30px; }
-    .card { flex: 1; background: #fff; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
-    .card h3 { margin: 0 0 10px 0; color: #6c757d; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .card .value { font-size: 32px; font-weight: bold; color: #212529; }
-    .card .value.anomaly { color: #dc3545; }
+    /* Variables de Color Modo Oscuro Senior */
+    :root {
+        --bg-main: #0b0d14;
+        --bg-card: #121420;
+        --border-color: #1e2235;
+        --text-main: #f3f4f6;
+        --text-muted: #6b7280;
+        --color-primary: #3b82f6;
+        --color-warning: #f59e0b;
+        --color-critical: #ef4444;
+        --color-success: #10b981;
+    }
+
+    /* Integramos el contenedor cuidando los bloques del administrador */
+    .dashboard-container { 
+        padding: 30px; 
+        font-family: 'Inter', sans-serif; 
+        background: var(--bg-main); 
+        min-height: 100vh;
+        color: var(--text-main);
+    }
     
-    .chart-box { background: #fff; border: 1px solid #e0e0e0; padding: 24px; border-radius: 8px; max-width: 700px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
-    .chart-box h3 { margin-top: 0; margin-bottom: 20px; color: #495057; font-size: 16px; }
+    .dashboard-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 35px;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 20px;
+    }
+
+    .dashboard-header h1 { 
+        margin: 0; 
+        font-size: 26px; 
+        font-weight: 700; 
+        letter-spacing: -0.05em;
+        color: var(--text-main) !important; /* Sobreescribe estilos viejos del admin */
+    }
+    
+    .dashboard-header h1 span { color: var(--color-critical); }
+
+    .status-badge {
+        background-color: rgba(16, 185, 129, 0.1);
+        color: var(--color-success);
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .status-dot { 
+        width: 8px; 
+        height: 8px; 
+        background-color: var(--color-success); 
+        border-radius: 50%; 
+        animation: pulse 2s infinite;
+    }
+
+    /* Grid de tarjetas estéticas con animaciones al pasar el mouse */
+    .metrics-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
+    
+    .card { 
+        background: var(--bg-card); 
+        border: 1px solid var(--border-color); 
+        padding: 24px; 
+        border-radius: 12px; 
+        transition: all 0.2s ease-in-out;
+    }
+    
+    .card:hover {
+        border-color: var(--color-primary);
+        transform: translateY(-3px);
+        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.15);
+    }
+
+    .card-critical:hover {
+        border-color: var(--color-critical);
+        box-shadow: 0 6px 20px rgba(239, 68, 68, 0.15);
+    }
+
+    .card h3 { 
+        margin: 0 0 12px 0; 
+        color: var(--text-muted); 
+        font-size: 12px; 
+        text-transform: uppercase; 
+        letter-spacing: 0.05em; 
+        font-weight: 600;
+    }
+    
+    .card .value { font-size: 36px; font-weight: 700; letter-spacing: -0.02em; }
+    .card .value.anomaly { color: var(--color-critical); }
+    
+    /* Contenedor del Gráfico de ApexCharts */
+    .chart-box { 
+        background: var(--bg-card); 
+        border: 1px solid var(--border-color); 
+        padding: 24px; 
+        border-radius: 12px; 
+        box-shadow: 0 4px 20px rgba(0,0,0,0.2); 
+    }
+    
+    .chart-box h3 { 
+        margin-top: 0; 
+        margin-bottom: 25px; 
+        color: var(--text-main); 
+        font-size: 16px; 
+        font-weight: 600;
+    }
+
+    @keyframes pulse {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+        70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="dashboard-container">
-    <h1 style="margin-bottom: 25px; color: #343a40;">{{ title }}</h1>
-
-    <!-- Bloque Superior: Tarjetas con Resúmenes numéricos -->
-    <div class="metrics-row">
-        <div class="card">
-            <h3>Nodos de Servidores</h3>
-            <div class="value">{{ servers }}</div>
+    
+    <div class="dashboard-header">
+        <div>
+            <h1>AKAINU <span>•</span> AI MANAGEMENT PANEL</h1>
+            <p style="color: var(--text-muted); margin: 5px 0 0 0; font-size: 14px;">Centro de control perimetral y analítica masiva distribuida</p>
         </div>
-        <div class="card">
-            <h3>Anomalías Detectadas (IA)</h3>
-            <div class="value anomaly">{{ anomalies }}</div>
+        <div class="status-badge">
+            <span class="status-dot"></span> MOTOR DE LOGS ACTIVO
         </div>
     </div>
 
-    <!-- Bloque Inferior: El Gráfico de Barras -->
+    <div class="metrics-row">
+        <div class="card">
+            <h3>Nodos Activos</h3>
+            <div class="value" id="metric-servers">{{ servers }}</div>
+        </div>
+        <div class="card card-critical">
+            <h3>Anomalías Críticas (IA)</h3>
+            <div class="value anomaly" id="metric-anomalies">{{ anomalies }}</div>
+        </div>
+        <div class="card">
+            <h3>Última Telemetría</h3>
+            <div class="value" id="metric-time" style="color: var(--color-primary); font-size: 28px; padding-top: 5px;">--:--:--</div>
+        </div>
+    </div>
+
     <div class="chart-box">
-        <h3>Distribución de Logs por Nivel de Gravedad</h3>
-        <canvas id="akainuChart" width="400" height="200"></canvas>
+        <h3>Distribución de Eventos por Nivel de Gravedad</h3>
+        <div id="chart-bars"></div>
     </div>
 </div>
 
 {{ chart_labels|json_script:"chart-labels-data" }}
 {{ chart_data|json_script:"chart-data-data" }}
 
-<!-- Cargamos Chart.js desde su red de distribución oficial (CDN) -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <script>
     document.addEventListener("DOMContentLoaded", function() {
-        // 1. Obtener el lienzo (canvas) del HTML
-        const ctx = document.getElementById('akainuChart').getContext('2d');
+        
+        // 1. Parsear los datos que Django envía inicialmente al cargar la página
+        const initialLabels = JSON.parse(document.getElementById('chart-labels-data').textContent);
+        const initialDataValues = JSON.parse(document.getElementById('chart-data-data').textContent);
 
-        // 2. Inyectar variables limpias de Django
-        const chartLabels = JSON.parse(document.getElementById('chart-labels-data').textContent);
-        const chartDataValues = JSON.parse(document.getElementById('chart-data-data').textContent);
-
-        // 3. Inicializar el gráfico de barras de Chart.js
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: chartLabels,
-                datasets: [{
-                    label: 'Cantidad de Eventos',
-                    data: chartDataValues,
-                    backgroundColor: [
-                        'rgba(52, 152, 219, 0.7)',
-                        'rgba(241, 196, 15, 0.7)',
-                        'rgba(231, 76, 60, 0.7)',
-                        'rgba(155, 89, 182, 0.7)'
-                    ],
-                    borderColor: [
-                        '#2980b9',
-                        '#f39c12',
-                        '#c0392b',
-                        '#8e44ad'
-                    ],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    }
+        // 2. Configurar e Inicializar ApexCharts con la Paleta de Producción
+        const options = {
+            series: [{
+                name: 'Eventos',
+                data: initialDataValues  // Inyección inicial
+            }],
+            chart: {
+                type: 'bar',
+                height: 350,
+                toolbar: { show: false },
+                animations: {
+                    enabled: true,
+                    easing: 'easeinout',
+                    speed: 800,
+                    dynamicAnimation: { enabled: true, speed: 350 }
                 }
+            },
+            plotOptions: {
+                bar: {
+                    borderRadius: 6,
+                    horizontal: false,
+                    columnWidth: '40%',
+                    distributed: true,
+                }
+            },
+            dataLabels: { enabled: false },
+            colors: ['#3b82f6', '#f59e0b', '#ef4444', '#a855f7'], // Azul, Amarillo, Rojo, Púrpura elegante
+            xaxis: {
+                categories: initialLabels, // Inyección inicial de etiquetas
+                labels: {
+                    style: { colors: '#6b7280', fontSize: '13px', fontFamily: 'Inter' }
+                },
+                axisBorder: { show: false },
+                axisTicks: { show: false }
+            },
+            yaxis: {
+                labels: {
+                    style: { colors: '#6b7280', fontFamily: 'Inter' }
+                }
+            },
+            grid: {
+                borderColor: '#1e2235',
+                strokeDashArray: 4,
+                xaxis: { lines: { show: false } }
+            },
+            tooltip: { theme: 'dark' },
+            legend: { show: false }
+        };
+
+        const chart = new ApexCharts(document.querySelector("#chart-bars"), options);
+        chart.render();
+
+        // 3. Configurar e Inicializar CountUp.js para los números de las Tarjetas
+        const countOptions = { duration: 1.5, useEasing: true, useGrouping: true };
+        
+        // Inicializamos tomando el número actual renderizado por Django
+        const initServersVal = parseInt(document.getElementById('metric-servers').innerText) || 0;
+        const initAnomaliesVal = parseInt(document.getElementById('metric-anomalies').innerText) || 0;
+
+        const counterServers = new countUp.CountUp('metric-servers', initServersVal, countOptions);
+        const counterAnomalies = new countUp.CountUp('metric-anomalies', initAnomaliesVal, countOptions);
+
+        counterServers.start();
+        counterAnomalies.start();
+
+        // 4. Bucle en tiempo real (Sincronización asíncrona con tu endpoint)
+        async function fetchRealtimeTelemetry() {
+            try {
+                // Llama al endpoint de métricas agregadas optimizadas que creamos
+                const response = await fetch('/api/dashboard-stats/');
+                if (!response.ok) return;
+                
+                const data = await response.json();
+
+                // Actualizar números de tarjetas con transiciones fluidas de CountUp
+                counterServers.update(data.servers_count || initServersVal); 
+                counterAnomalies.update(data.critical || data.error || initAnomaliesVal);
+                
+                // Actualizar estampa de tiempo
+                document.getElementById('metric-time').innerText = data.timestamp;
+
+                // Actualizar barras de la gráfica con animaciones elásticas nativas
+                // El backend debe retornar el array en el mismo orden: [info, warning, critical, otro]
+                chart.updateSeries([{
+                    data: [data.info, data.warning, data.critical]
+                }]);
+
+            } catch (error) {
+                console.error("Error actualizando telemetría de Akainu:", error);
             }
-        });
+        }
+
+        // Ejecutar actualización asíncrona automática cada 3 segundos
+        setInterval(fetchRealtimeTelemetry, 3000);
+        
+        // Seteamos la hora inicial en la tarjeta
+        const ahora = new Date();
+        document.getElementById('metric-time').innerText = ahora.toTimeString().split(' ')[0];
     });
 </script>
 {% endblock %}
